@@ -1,57 +1,53 @@
-import React, { useState, useEffect } from "react";
-import {
-  Calendar,
-  Clock,
-  CheckCircle,
-  Timer,
-  DollarSign,
-  TrendingUp,
-  AlertTriangle,
-  Calculator,
-} from "lucide-react";
+import React, { useState, useEffect } from 'react';
+import { Calendar, Clock, CheckCircle, Timer, DollarSign, TrendingUp, AlertTriangle, Calculator } from 'lucide-react';
 
 function App() {
   const [timeElapsed, setTimeElapsed] = useState({
     days: 0,
     hours: 0,
     minutes: 0,
-    totalMinutes: 0,
+    totalMinutes: 0
   });
   const [debtCalculation, setDebtCalculation] = useState({
-    valorTotalDivida: 0,
-    multaTotal: 0,
-    jurosTotal: 0,
-    valorTotalComMultasEJuros: 0,
+    totalOriginal: 0,
+    totalMulta: 0,
+    totalJuros: 0,
+    totalFinal: 0,
     diasEmAtraso: 0,
-    mesesEmAtraso: 0,
+    parcelasEmAtraso: 0
   });
   const [isAnimating, setIsAnimating] = useState(false);
 
-  // Função para calcular a multa (limitada a 20%)
-  const calcularMulta = (valor: number, diasEmAtraso: number): number => {
-    const multaDiaria = 0.33 / 100; // 0,33% ao dia
-    const limiteMulta = 20 / 100; // 20% do valor total
-    const multaDiariaTotal = multaDiaria * diasEmAtraso * valor;
-    return Math.min(multaDiariaTotal, valor * limiteMulta);
+  // Utilitário para datas
+  const diferencaEmDias = (data1: Date, data2: Date): number => {
+    const msPorDia = 1000 * 60 * 60 * 24;
+    return Math.floor((data2.getTime() - data1.getTime()) / msPorDia);
   };
 
-  // Função para calcular juros compostos
-  const calcularJuros = (
-    valor: number,
-    diasEmAtraso: number,
-    taxaJurosAnual: number
-  ): number => {
-    const taxaJurosDiaria = Math.pow(1 + taxaJurosAnual, 1 / 365) - 1;
-    return valor * Math.pow(1 + taxaJurosDiaria, diasEmAtraso) - valor;
+  // Simulação da taxa Selic acumulada (usamos 0,8% ao mês como estimativa média)
+  const calcularSelicAcumulada = (meses: number, taxaMensal = 0.008): number => {
+    return Math.pow(1 + taxaMensal, meses) - 1;
+  };
+
+  // Cálculo da multa (0,33% ao dia útil, limitado a 20%)
+  const calcularMulta = (valor: number, diasCorridos: number): number => {
+    const multa = valor * 0.0033 * diasCorridos;
+    return Math.min(multa, valor * 0.20);
+  };
+
+  // Cálculo dos juros: Selic acumulada + 1% fixo no mês do pagamento
+  const calcularJuros = (valor: number, mesesAtraso: number): number => {
+    const selic = calcularSelicAcumulada(mesesAtraso);
+    return valor * (selic + 0.01); // 1% fixo no mês do pagamento
   };
 
   // Calcular tempo e dívida
   useEffect(() => {
     const updateCalculations = () => {
-      const startDate = new Date("2024-03-20T00:00:00");
+      const startDate = new Date('2024-03-20T00:00:00');
       const now = new Date();
       const diffTime = now.getTime() - startDate.getTime();
-
+      
       // Cálculo do tempo
       const totalMinutes = Math.floor(diffTime / (1000 * 60));
       const days = Math.floor(totalMinutes / (24 * 60));
@@ -62,62 +58,83 @@ function App() {
         days,
         hours,
         minutes,
-        totalMinutes,
+        totalMinutes
       });
 
-      // Cálculo da dívida
-      const valorAntigo = 76.6; // valor da parcela do ano passado
-      const valorAtual = 80.6; // valor da parcela deste ano
-      const dataInicio = new Date(2024, 2, 20); // 20 de março de 2024
+      // ----------- CONFIGURAÇÃO DAS PARCELAS ------------
+      const valorParcela2024 = 76.60;
+      const valorParcela2025 = 80.60;
       const dataAtual = now;
-      const taxaSelicAno = 13.75 / 100; // Taxa Selic de 13,75% ao ano
+      const parcelas: { vencimento: Date, valor: number }[] = [];
 
-      // Calculando o número de dias em atraso
-      const diasEmAtraso = Math.floor(
-        (dataAtual.getTime() - dataInicio.getTime()) / (1000 * 3600 * 24)
-      );
+      // Gerar parcelas de março/2024 até junho/2025
+      for (let ano = 2024; ano <= 2025; ano++) {
+        const mesInicio = ano === 2024 ? 2 : 0; // março é mês 2
+        const mesFim = ano === 2024 ? 11 : 5;   // até junho/2025
+        for (let mes = mesInicio; mes <= mesFim; mes++) {
+          const vencimento = new Date(ano, mes, 20);
+          const valor = ano === 2024 ? valorParcela2024 : valorParcela2025;
+          parcelas.push({ vencimento, valor });
+        }
+      }
 
-      // Número total de meses em atraso
-      const mesesEmAtraso =
-        (dataAtual.getFullYear() - dataInicio.getFullYear()) * 12 +
-        dataAtual.getMonth() -
-        dataInicio.getMonth();
+      // ----------- CÁLCULO TOTAL DAS PARCELAS ------------
+      let totalOriginal = 0;
+      let totalMulta = 0;
+      let totalJuros = 0;
 
-      // Calcular o total da dívida
-      const parcelas2024Atrasadas = valorAntigo * mesesEmAtraso;
-      const parcelas2025Atrasadas = valorAtual * mesesEmAtraso;
-      const valorTotalDividaCorrigido =
-        parcelas2024Atrasadas + parcelas2025Atrasadas;
+      parcelas.forEach((parcela, index) => {
+        totalOriginal += parcela.valor;
 
-      // Calculando multa e juros
-      const multaTotalCorrigida = calcularMulta(
-        valorTotalDividaCorrigido,
-        diasEmAtraso
-      );
-      const jurosTotalCorrigido = calcularJuros(
-        valorTotalDividaCorrigido,
-        diasEmAtraso,
-        taxaSelicAno
-      );
-      const valorTotalComMultasEJurosCorrigido =
-        valorTotalDividaCorrigido + multaTotalCorrigida + jurosTotalCorrigido;
+        const diasAtraso = diferencaEmDias(new Date(parcela.vencimento.getTime() + 86400000), dataAtual);
+
+        const mesesAtraso = (dataAtual.getFullYear() - parcela.vencimento.getFullYear()) * 12 +
+                            (dataAtual.getMonth() - parcela.vencimento.getMonth()) - 1;
+
+        const multa = calcularMulta(parcela.valor, diasAtraso);
+        const juros = calcularJuros(parcela.valor, mesesAtraso);
+
+        totalMulta += multa;
+        totalJuros += juros;
+
+        // Saída detalhada da parcela
+        console.log(`Parcela ${index + 1} - Venc: ${parcela.vencimento.toLocaleDateString('pt-BR')}`);
+        console.log(`  Valor Original: R$ ${parcela.valor.toFixed(2)}`);
+        console.log(`  Dias em atraso: ${diasAtraso}`);
+        console.log(`  Meses de atraso: ${mesesAtraso}`);
+        console.log(`  Multa: R$ ${multa.toFixed(2)}`);
+        console.log(`  Juros: R$ ${juros.toFixed(2)}`);
+        console.log(`  Total da parcela com acréscimos: R$ ${(parcela.valor + multa + juros).toFixed(2)}\n`);
+      });
+
+      const totalFinal = totalOriginal + totalMulta + totalJuros;
+
+      console.log("========= RESUMO FINAL =========");
+      console.log(`Total Original: R$ ${totalOriginal.toFixed(2)}`);
+      console.log(`Total Multa:    R$ ${totalMulta.toFixed(2)}`);
+      console.log(`Total Juros:    R$ ${totalJuros.toFixed(2)}`);
+      console.log(`Total Final:    R$ ${totalFinal.toFixed(2)}`);
+
+      // Calcular dias em atraso desde a primeira parcela vencida
+      const primeiraParcela = new Date('2024-03-20');
+      const diasEmAtraso = diferencaEmDias(primeiraParcela, dataAtual);
 
       setDebtCalculation({
-        valorTotalDivida: valorTotalDividaCorrigido,
-        multaTotal: multaTotalCorrigida,
-        jurosTotal: jurosTotalCorrigido,
-        valorTotalComMultasEJuros: valorTotalComMultasEJurosCorrigido,
+        totalOriginal,
+        totalMulta,
+        totalJuros,
+        totalFinal,
         diasEmAtraso,
-        mesesEmAtraso,
+        parcelasEmAtraso: parcelas.length
       });
     };
 
     // Atualizar imediatamente
     updateCalculations();
-
+    
     // Atualizar a cada minuto
     const interval = setInterval(updateCalculations, 60000);
-
+    
     // Ativar animação na montagem
     setTimeout(() => setIsAnimating(true), 500);
 
@@ -130,9 +147,9 @@ function App() {
   };
 
   const formatCurrency = (value: number) => {
-    return value.toLocaleString("pt-BR", {
-      style: "currency",
-      currency: "BRL",
+    return value.toLocaleString('pt-BR', {
+      style: 'currency',
+      currency: 'BRL'
     });
   };
 
@@ -163,7 +180,7 @@ function App() {
             <br />
             <span className="text-white">HOJE?</span>
           </h1>
-
+          
           <div className="flex justify-center mb-6">
             <div className="bg-white/10 backdrop-blur-sm rounded-full p-4 border border-white/20">
               <Calendar className="w-8 h-8 text-yellow-400" />
@@ -180,40 +197,32 @@ function App() {
             </h2>
             <Clock className="w-6 h-6 text-green-400" />
           </div>
-
-          <div
-            className={`cursor-pointer transition-all duration-300 ${
-              isAnimating ? "scale-105" : "scale-100"
-            }`}
+          
+          <div 
+            className={`cursor-pointer transition-all duration-300 ${isAnimating ? 'scale-105' : 'scale-100'}`}
             onClick={handleClockClick}
           >
             {/* Display do Relógio Digital */}
             <div className="grid grid-cols-3 gap-4 md:gap-8 mb-6">
               <div className="bg-black/30 rounded-2xl p-4 border border-white/20">
                 <div className="text-3xl md:text-5xl font-black text-transparent bg-gradient-to-r from-red-400 to-pink-500 bg-clip-text">
-                  {timeElapsed.days.toString().padStart(2, "0")}
+                  {timeElapsed.days.toString().padStart(2, '0')}
                 </div>
-                <div className="text-sm md:text-base text-white/80 font-medium mt-2">
-                  DIAS
-                </div>
+                <div className="text-sm md:text-base text-white/80 font-medium mt-2">DIAS</div>
               </div>
-
+              
               <div className="bg-black/30 rounded-2xl p-4 border border-white/20">
                 <div className="text-3xl md:text-5xl font-black text-transparent bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text">
-                  {timeElapsed.hours.toString().padStart(2, "0")}
+                  {timeElapsed.hours.toString().padStart(2, '0')}
                 </div>
-                <div className="text-sm md:text-base text-white/80 font-medium mt-2">
-                  HORAS
-                </div>
+                <div className="text-sm md:text-base text-white/80 font-medium mt-2">HORAS</div>
               </div>
-
+              
               <div className="bg-black/30 rounded-2xl p-4 border border-white/20">
                 <div className="text-3xl md:text-5xl font-black text-transparent bg-gradient-to-r from-green-400 to-blue-500 bg-clip-text animate-pulse">
-                  {timeElapsed.minutes.toString().padStart(2, "0")}
+                  {timeElapsed.minutes.toString().padStart(2, '0')}
                 </div>
-                <div className="text-sm md:text-base text-white/80 font-medium mt-2">
-                  MINUTOS
-                </div>
+                <div className="text-sm md:text-base text-white/80 font-medium mt-2">MINUTOS</div>
               </div>
             </div>
 
@@ -223,14 +232,16 @@ function App() {
                 Total de Minutos Decorridos
               </div>
               <div className="text-4xl md:text-6xl font-black text-transparent bg-gradient-to-r from-purple-400 via-pink-500 to-red-500 bg-clip-text">
-                {timeElapsed.totalMinutes.toLocaleString("pt-BR")}
+                {timeElapsed.totalMinutes.toLocaleString('pt-BR')}
               </div>
             </div>
           </div>
-
+          
           <div className="flex items-center justify-center gap-2 text-gray-300 mt-4">
             <CheckCircle className="w-5 h-5 text-green-400" />
-            <p className="text-lg font-medium">Atualiza a cada minuto!</p>
+            <p className="text-lg font-medium">
+              Atualiza a cada minuto!
+            </p>
           </div>
         </div>
 
@@ -259,12 +270,10 @@ function App() {
             <div className="bg-black/30 rounded-2xl p-6 border border-red-500/30">
               <div className="flex items-center gap-3 mb-3">
                 <Calendar className="w-5 h-5 text-purple-400" />
-                <h3 className="text-lg font-bold text-white">
-                  Meses em Atraso
-                </h3>
+                <h3 className="text-lg font-bold text-white">Parcelas em Atraso</h3>
               </div>
               <div className="text-3xl md:text-4xl font-black text-transparent bg-gradient-to-r from-purple-400 to-pink-500 bg-clip-text">
-                {debtCalculation.mesesEmAtraso}
+                {debtCalculation.parcelasEmAtraso}
               </div>
             </div>
           </div>
@@ -272,41 +281,33 @@ function App() {
           {/* Breakdown da Dívida */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             <div className="bg-gradient-to-br from-blue-500/20 to-cyan-500/20 rounded-2xl p-4 border border-blue-500/30">
-              <div className="text-sm text-blue-300 font-medium mb-2">
-                DÍVIDA PRINCIPAL
-              </div>
+              <div className="text-sm text-blue-300 font-medium mb-2">VALOR ORIGINAL</div>
               <div className="text-xl md:text-2xl font-black text-white">
-                {formatCurrency(debtCalculation.valorTotalDivida)}
+                {formatCurrency(debtCalculation.totalOriginal)}
               </div>
             </div>
 
             <div className="bg-gradient-to-br from-orange-500/20 to-red-500/20 rounded-2xl p-4 border border-orange-500/30">
-              <div className="text-sm text-orange-300 font-medium mb-2">
-                MULTA (0,33%/dia)
-              </div>
+              <div className="text-sm text-orange-300 font-medium mb-2">MULTA (0,33%/dia)</div>
               <div className="text-xl md:text-2xl font-black text-white">
-                {formatCurrency(debtCalculation.multaTotal)}
+                {formatCurrency(debtCalculation.totalMulta)}
               </div>
             </div>
 
             <div className="bg-gradient-to-br from-yellow-500/20 to-orange-500/20 rounded-2xl p-4 border border-yellow-500/30">
-              <div className="text-sm text-yellow-300 font-medium mb-2">
-                JUROS (13,75% a.a.)
-              </div>
+              <div className="text-sm text-yellow-300 font-medium mb-2">JUROS (SELIC + 1%)</div>
               <div className="text-xl md:text-2xl font-black text-white">
-                {formatCurrency(debtCalculation.jurosTotal)}
+                {formatCurrency(debtCalculation.totalJuros)}
               </div>
             </div>
 
             <div className="bg-gradient-to-br from-red-500/20 to-pink-500/20 rounded-2xl p-4 border border-red-500/30">
               <div className="flex items-center gap-2 mb-2">
                 <TrendingUp className="w-4 h-4 text-red-300" />
-                <div className="text-sm text-red-300 font-medium">
-                  TOTAL GERAL
-                </div>
+                <div className="text-sm text-red-300 font-medium">TOTAL GERAL</div>
               </div>
               <div className="text-xl md:text-2xl font-black text-transparent bg-gradient-to-r from-red-400 to-pink-500 bg-clip-text animate-pulse">
-                {formatCurrency(debtCalculation.valorTotalComMultasEJuros)}
+                {formatCurrency(debtCalculation.totalFinal)}
               </div>
             </div>
           </div>
@@ -318,11 +319,26 @@ function App() {
                 🚨 VALOR TOTAL DA DÍVIDA 🚨
               </div>
               <div className="text-5xl md:text-7xl font-black text-transparent bg-gradient-to-r from-red-400 via-pink-500 to-red-600 bg-clip-text animate-pulse">
-                {formatCurrency(debtCalculation.valorTotalComMultasEJuros)}
+                {formatCurrency(debtCalculation.totalFinal)}
               </div>
               <div className="text-lg text-red-200 mt-4 font-medium">
                 E continua crescendo a cada dia! 📈
               </div>
+            </div>
+          </div>
+
+          {/* Detalhes do Cálculo */}
+          <div className="mt-6 bg-black/20 rounded-2xl p-6 border border-white/10">
+            <div className="text-center text-white/80 text-sm">
+              <p className="mb-2">
+                <strong>Metodologia:</strong> Multa de 0,33% por dia corrido (máx. 20%) + Juros SELIC acumulada (≈0,8%/mês) + 1% fixo
+              </p>
+              <p className="mb-2">
+                Cálculo baseado em {debtCalculation.parcelasEmAtraso} parcelas (março/2024 a junho/2025)
+              </p>
+              <p className="text-xs text-white/60">
+                Valores: R$ 76,60 (2024) | R$ 80,60 (2025) | Veja o console para detalhes de cada parcela
+              </p>
             </div>
           </div>
         </div>
@@ -333,12 +349,12 @@ function App() {
             <div className="text-4xl mb-2">🤔</div>
             <p className="text-white font-bold">TALVEZ?</p>
           </div>
-
+          
           <div className="bg-yellow-500/20 backdrop-blur-sm rounded-2xl p-6 border border-yellow-500/30">
             <div className="text-4xl mb-2">⏰</div>
             <p className="text-white font-bold">TIC TAC</p>
           </div>
-
+          
           <div className="bg-green-500/20 backdrop-blur-sm rounded-2xl p-6 border border-green-500/30">
             <div className="text-4xl mb-2">💸</div>
             <p className="text-white font-bold">IMPOSTOS!</p>
